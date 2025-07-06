@@ -349,7 +349,7 @@ ARG LARADOCK_PHALCON_VERSION
 ENV LARADOCK_PHALCON_VERSION ${LARADOCK_PHALCON_VERSION}
 
 RUN if [ $INSTALL_PHALCON = true ]; then \
-      apt-get update -yqq \
+      apt-get update -yqq --allow-releaseinfo-change \
       && pecl channel-update pecl.php.net \
       && apt-get install -yqq libpcre3-dev; \
       pecl install phalcon-${LARADOCK_PHALCON_VERSION}; \
