@@ -23,7 +23,7 @@ scrape_configs:
     # hapus 'network_mode: host' dari konfigurasi node_exporter di docker-compose.yml
     # dan pastikan node_exporter juga berada di network 'laradock-81_backend'.
     static_configs:
-      - targets: ['node_exporter:9100'] # Asumsi Node Exporter di port defaultnya
+      - targets: ['node-exporter:9100'] # Asumsi Node Exporter di port defaultnya
 
   # Job untuk MySQL Exporter (memantau database MySQL)
   # Ini membutuhkan layanan 'mysql-exporter' diaktifkan di Laradock dan berjalan.
@@ -34,12 +34,10 @@ scrape_configs:
     static_configs:
       - targets: ['mysql-exporter:9104'] # Port default mysql-exporter di Laradock
 
-  # Job untuk Aplikasi Laravel Anda (jika Anda menggunakan Spatie Laravel Prometheus atau exporter serupa)
-  - job_name: 'laravel_app'
-    metrics_path: /prometheus # <--- PATH KE ENDPOINT METRIK LARAVEL ANDA (misalnya, '/prometheus' dari Spatie)
+  - job_name: 'nginx'
     static_configs:
-      - targets: ['nginx:80'] # Mengambil metrik melalui Nginx, asumsikan Nginx merutekan /prometheus ke aplikasi Anda
-
+      - targets: ['nginx-exporter:9113']
+      
   # Catatan tentang PHP-FPM:
   # Layanan php-fpm itu sendiri di port 9000 tidak langsung mengekspos metrik Prometheus.
   # Untuk mendapatkan metrik dari PHP-FPM, Anda biasanya memerlukan sebuah PHP-FPM Exporter
@@ -48,3 +46,7 @@ scrape_configs:
   #   metrics_path: /metrics # Sesuaikan dengan path metrik exporter Anda
   #   static_configs:
   #     - targets: ['nama_service_php_fpm_exporter:port'] # Contoh: 'php-fpm-exporter:9xxx'
+
+  - job_name: 'php-fpm'
+    static_configs:
+      - targets: ['php-fpm-exporter:9253']

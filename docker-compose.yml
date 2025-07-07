@@ -317,6 +317,8 @@ services:
           - no_proxy
       volumes:
         - ./php-fpm/php${PHP_VERSION}.ini:/usr/local/etc/php/php.ini
+        - ./php-fpm/prometheus/monitor.conf:/usr/local/etc/php-fpm.d/zz-prometheus-monitor.conf
+        - ./php-fpm/prometheus/www.conf:/usr/local/etc/php-fpm.d/www.conf
         - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
         - docker-in-docker:/certs/client
       expose:
@@ -2250,6 +2252,7 @@ services:
         - backend
 
     prometheus:
+      restart: always
       image: prom/prometheus:latest # Gunakan versi Prometheus terbaru atau spesifik
       volumes:
         - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Mount file config
@@ -2261,7 +2264,8 @@ services:
         - backend # Pastikan ini berada di network yang sama dengan layanan lain yang ingin Anda pantau
 
     # Contoh layanan Node Exporter (opsional, untuk memantau host Docker itu sendiri)
-    node_exporter:
+    node-exporter:
+      restart: always
       image: prom/node-exporter:latest
       command:
         - '--path.rootfs=/host'
@@ -2274,20 +2278,40 @@ services:
         - backend
 
     mysql-exporter:
-      image: prom/mysqld-exporter:latest # Menggunakan image resmi MySQL Exporter
-      container_name: mysql-exporter
-      command: --collect.global_status --collect.slave_status --collect.info_schema.innodb_metrics
-      environment:
-        # Kredensial untuk MySQL Exporter terhubung ke database MySQL Laradock Anda
-        # Gunakan variabel lingkungan dari .env Laradock Anda
-        DATA_SOURCE_NAME: root:root@tcp(mysql:3306)/ # Sesuaikan 'root:root' jika user/pass Anda berbeda
-        # Sesuaikan ${MYSQL_USER}, ${MYSQL_PASSWORD} dengan yang ada di .env Laradock Anda
-        # 'mysql' adalah nama service MySQL di Laradock
-        # ${MYSQL_PORT:-3306} adalah port internal MySQL
+      restart: always
+      image: prom/mysqld-exporter:latest
+      command: 
+        - "--mysqld.username=root:root"
+        - "--mysqld.address=mysql:3306" 
       ports:
         - "9104:9104" # Mengekspos port default MySQL Exporter ke host
       networks:
         - backend # Pastikan ini berada di network yang sama dengan Prometheus
       depends_on:
         - mysql # mysql-exporter bergantung pada layanan mysql
-      restart: on-failure
+
+    nginx-exporter:
+      restart: always
+      image: nginx/nginx-prometheus-exporter:latest
+      ports:
+        - "9113:9113"
+      command: -nginx.scrape-uri=http://nginx:80/stub_status
+      depends_on:
+        - nginx
+      networks:
+        - backend
+
+    php-fpm-exporter:
+      restart: always
+      image: hipages/php-fpm_exporter
+      environment:
+        PHP_FPM_SCRAPE_URI: 'tcp://laradock-81-php-fpm-1:9000/status'
+      ports:
+        - "9253:9253"
+      depends_on:
+        - php-fpm
+        - nginx
+      networks:
+        - backend
+
+
