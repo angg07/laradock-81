@@ -47,9 +47,18 @@ ENV PUID ${PUID}
 ARG PGID=1000
 ENV PGID ${PGID}
 
+# Set apt-get options:
+ARG WORKSPACE_ALLOW_RELEASE_INFO_CHANGE=false
+ENV WORKSPACE_ALLOW_RELEASE_INFO_CHANGE ${WORKSPACE_ALLOW_RELEASE_INFO_CHANGE}
+
 # always run apt update when start and after add new source list, then clean up at end.
 RUN set -xe; \
-    apt-get update -yqq && \
+    if [ ${WORKSPACE_ALLOW_RELEASE_INFO_CHANGE} = true ]; then \
+      APT_GET_UPDATE_OPTIONS="--allow-releaseinfo-change"; \
+    else \
+      APT_GET_UPDATE_OPTIONS=""; \
+    fi; \
+    apt-get update -yqq ${APT_GET_UPDATE_OPTIONS} && \
     pecl channel-update pecl.php.net && \
     if [ $(php -r "echo PHP_MAJOR_VERSION;") = "8" ] && [ $(php -r "echo PHP_MINOR_VERSION;") != "0" ]; then \
       groupmod --new-name laradock ubuntu; \
@@ -115,14 +124,14 @@ RUN sed -i 's/\r//' /root/aliases.sh && \
     echo "" >> ~/.bashrc && \
     echo "# Load Custom Aliases" >> ~/.bashrc && \
     echo "source ~/aliases.sh" >> ~/.bashrc && \
-	  echo "" >> ~/.bashrc
+    echo "" >> ~/.bashrc
 
 USER laradock
 
 RUN echo "" >> ~/.bashrc && \
     echo "# Load Custom Aliases" >> ~/.bashrc && \
     echo "source ~/aliases.sh" >> ~/.bashrc && \
-	  echo "" >> ~/.bashrc
+    echo "" >> ~/.bashrc
 
 ###########################################################################
 # Composer:
@@ -320,7 +329,13 @@ RUN set -eux; \
     # SMB:
     ###########################################################################
     if [ ${INSTALL_SMB} = true ]; then \
-        apt-get install -yqq smbclient php${LARADOCK_PHP_VERSION}-smbclient coreutils; \
+        apt-get install -yqq smbclient libsmbclient-dev php${LARADOCK_PHP_VERSION}-smbclient coreutils && \
+        if [ $(php -r "echo PHP_MAJOR_VERSION;") = "8" ]; then \
+            pecl install smbclient; \
+        else \
+            pecl install smbclient-1.1.2; \
+        fi && \
+        echo "extension=smbclient.so" >> /etc/php/${LARADOCK_PHP_VERSION}/cli/php.ini; \
     fi; \
     ###########################################################################
     # IMAP:
@@ -350,7 +365,7 @@ RUN if [ ${INSTALL_XDEBUG} = true ]; then \
   apt-get install -yqq pkg-config php-xml php${LARADOCK_PHP_VERSION}-xml && \
   if [ $(php -r "echo PHP_MAJOR_VERSION;") = "8" ] || { [ $(php -r "echo PHP_MAJOR_VERSION;") = "7" ] && { [ $(php -r "echo PHP_MINOR_VERSION;") = "4" ] || [ $(php -r "echo PHP_MINOR_VERSION;") = "3" ] ;} ;}; then \
     if [ $(php -r "echo PHP_MAJOR_VERSION;") = "8" ]; then \
-      pecl install xdebug-3.3.0; \
+      pecl install xdebug-3.4.1; \
     else \
       pecl install xdebug-3.1.6; \
     fi; \
@@ -429,7 +444,7 @@ ENV BLACKFIRE_CLIENT_TOKEN ${BLACKFIRE_CLIENT_TOKEN}
 RUN if [ ${INSTALL_XDEBUG} = false -a ${INSTALL_BLACKFIRE} = true ]; then \
     curl -L https://packages.blackfire.io/gpg.key | apt-key add - && \
     echo "deb http://packages.blackfire.io/debian any main" | tee /etc/apt/sources.list.d/blackfire.list && \
-    apt-get update -yqq  && \
+    apt-get update -yqq && \
     apt-get install blackfire-agent \
 ;fi
 
@@ -469,14 +484,22 @@ RUN if [ ${INSTALL_MONGO} = true ]; then \
       ln -s /etc/php/${LARADOCK_PHP_VERSION}/mods-available/mongo.ini /etc/php/${LARADOCK_PHP_VERSION}/cli/conf.d/30-mongo.ini; \
       php -m | grep -oiE '^mongo$'; \
     else \
-      if [ $(php -r "echo PHP_MAJOR_VERSION;") = "7" ] && [ $(php -r "echo PHP_MINOR_VERSION;") != "4" ]; then \
+      if [ $(php -r "echo PHP_MAJOR_VERSION;") = "7" ]; then \
         if [ $(php -r "echo PHP_MINOR_VERSION;") = "0" ] || [ $(php -r "echo PHP_MINOR_VERSION;") = "1" ]; then \
           pecl install mongodb-1.9.2; \
         else \
-          pecl install mongodb-1.16.2; \
+          if [ $(php -r "echo PHP_MINOR_VERSION;") = "4" ]; then \
+            pecl install mongodb-1.20.1; \
+          else \
+            pecl install mongodb-1.16.2; \
+          fi; \
         fi; \
       else \
-        pecl install mongodb; \
+        if [ $(php -r "echo PHP_MAJOR_VERSION;") = "8" ] && [ $(php -r "echo PHP_MINOR_VERSION;") = "0" ]; then \
+            pecl install mongodb-1.20.1; \
+        else \
+            pecl install mongodb; \
+        fi; \
       fi; \
       echo "extension=mongodb.so" >> /etc/php/${LARADOCK_PHP_VERSION}/mods-available/mongodb.ini; \
       ln -s /etc/php/${LARADOCK_PHP_VERSION}/mods-available/mongodb.ini /etc/php/${LARADOCK_PHP_VERSION}/cli/conf.d/30-mongodb.ini; \
@@ -585,8 +608,11 @@ RUN set -eux; \
         echo '' | pecl -q install swoole-4.5.11; \
       elif [ $(php -r "echo PHP_MAJOR_VERSION;") = "7" ]; then \
         echo '' | pecl -q install swoole-4.8.12; \
+      elif [ $(php -r "echo PHP_MAJOR_VERSION;") = "8" ] && [ $(php -r "echo PHP_MINOR_VERSION;") = "0" ]; then \
+        echo '' | pecl -q install swoole-5.1.2; \
       else \
-        echo '' | pecl -q install swoole; \
+        apt-get install -yqq libbrotli-dev && \
+        echo '' | pecl -q  install swoole; \
       fi; \
       echo "extension=swoole.so" >> /etc/php/${LARADOCK_PHP_VERSION}/mods-available/swoole.ini; \
       ln -s /etc/php/${LARADOCK_PHP_VERSION}/mods-available/swoole.ini /etc/php/${LARADOCK_PHP_VERSION}/cli/conf.d/20-swoole.ini; \
